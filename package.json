@@ -4,7 +4,7 @@
   "description": "Core TypeScript types for Bun-based agents.",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/lucStev1n/agent-core.git"
+    "url": "git+https://github.com/ilovejavac/agent-core.git"
   },
   "type": "module",
   "types": "./src/index.ts",
