@@ -1,6 +1,7 @@
 import type {AgentEventListener, AgentLife, AgentOptions, Submission} from "./model.ts"
-import type {HistoryStore} from "./agent/store.ts"
+import type {HistoryStore} from "./agent"
 import type {AgentCore} from "./agent/core.ts"
+import {CreateOhMyPiAgent} from "./agent/omp.ts";
 
 type SessionState = {
     closing: boolean
@@ -137,7 +138,6 @@ export function createManager(
     listener?: AgentEventListener,
 ): SessionManager {
     return new SessionManager(store, life, async (id, options) => {
-        const {CreateOhMyPiAgent} = await import("./agent/omp.ts")
         return CreateOhMyPiAgent(id, options)
     }, listener)
 }

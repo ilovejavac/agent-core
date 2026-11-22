@@ -61,10 +61,9 @@ export type Submission = {
     operation: UserOperation
 }
 
-// agent-task[turn1, turn2, turn3.. ...turnN]
-
 export type AgentEvent = {
     type: string
+    usage?: any
 }
 
 export interface AgentEventListener {
