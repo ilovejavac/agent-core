@@ -1,0 +1,30 @@
+{
+  "name": "@centlu/agent-core",
+  "version": "0.1.0",
+  "description": "Core TypeScript types for Bun-based agents.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lucStev1n/agent-core.git"
+  },
+  "type": "module",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@oh-my-pi/pi-coding-agent": "^19.1.0"
+  }
+}
