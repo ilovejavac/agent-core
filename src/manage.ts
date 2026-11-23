@@ -81,10 +81,7 @@ export class SessionManager {
 
         try {
             unsubscribe = agent.subscribe(event => {
-                events = events.then(async () => {
-                    await this.store.append_history_to_store(event)
-                    await this.listener?.onEvent(event)
-                }).catch(error => console.error("事件处理失败", id, event.type, error))
+
             })
 
             agent.startHeartbeat(() => this.life.report(id))

@@ -45,11 +45,12 @@ export type AgentOptions = {
 
 export type TurnConfig = {
     revision: number
-    provider: 'openai' | 'anthropic' | 'google' | 'grok' | 'kimi' | 'deepseek'
+    provider: 'openai' | 'anthropic' | 'google' | 'xai' | 'moonshot' | 'deepseek' | 'azure' | 'zai'
     baseurl?: string
     model: string
     apiKey: string
-    contextWindow: number
+    contextWindow: number,
+    maxTokens: number,
     thinkingLevel: 'none' | 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'ultra',
 }
 
