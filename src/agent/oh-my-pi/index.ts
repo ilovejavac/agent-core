@@ -6,11 +6,16 @@ import type {AgentEvent, AgentOptions, UserOperation} from "../../model.ts"
 import {AbstractAgent, type AgentCore} from "../core.ts"
 import {applyTurnConfig} from "./config.ts";
 import {toEvents} from "./events.ts"
+import {restoreHistory} from "./history.ts"
 
-export async function CreateOhMyPiAgent(id: string, options: AgentOptions): Promise<AgentCore> {
+export async function CreateOhMyPiAgent(
+    id: string, options: AgentOptions, history: readonly AgentEvent[] = [],
+): Promise<AgentCore> {
+    const sessionManager = SessionManager.inMemory()
+    restoreHistory(sessionManager, history)
     const {session} = await createAgentSession({
         cwd: options.cwd,
-        sessionManager: SessionManager.inMemory(),
+        sessionManager,
     })
     await applyTurnConfig(session, options.setting)
 

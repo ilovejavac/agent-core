@@ -261,6 +261,7 @@ export function createManager(
     life: AgentLife,
 ): SessionManager {
     return new SessionManager(store, life, async (id, options) => {
-        return CreateOhMyPiAgent(id, options)
+        const history = await store.load_history_from_store(id)
+        return CreateOhMyPiAgent(id, options, history)
     })
 }

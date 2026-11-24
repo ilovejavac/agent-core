@@ -16,6 +16,8 @@ Create the manager with `createManager(store, life)` and bind one listener per s
 
 History stores receive the original non-delta events. Live delivery proceeds independently of history writes. The listener's `seq` orders live delivery within each binding and running session. Load the stored events for historical playback or to recover complete messages after reconnecting.
 
+When `createManager` opens or reopens a session, it loads that session's events in append order and uses completed messages and tool results to seed the in-memory Pi context before processing input. Restoration does not emit historical events. Compaction summaries and provider-native metadata are unavailable in the stored event format.
+
 ## Session Close
 
 `SessionManager.close(id)` gracefully drains the session. A close from another Pod uses the shared `HistoryStore` pending queue and waits up to 30 seconds for disposal to finish or for the targeted owner to leave. It throws on timeout or if the owner reports a disposal failure.

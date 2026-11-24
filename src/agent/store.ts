@@ -19,6 +19,7 @@ export type SessionCloseResult = {
 export type PendingMessage = Submission | SessionCloseRequest | SessionCloseResult
 
 export interface HistoryStore {
+    /** Load stored events for this session in append order. */
     load_history_from_store(id: string): Promise<Array<AgentEvent>>
     append_history_to_store(event: AgentEvent): Promise<void>
 
