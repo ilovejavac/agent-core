@@ -1,6 +1,6 @@
 {
   "name": "@centlu/agent-core",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Core TypeScript types for Bun-based agents.",
   "repository": {
     "type": "git",

@@ -1,4 +1,5 @@
 import type {AgentEventListener, AgentLife, AgentOptions, Submission} from "./model.ts"
+import type {AgentEvent} from "./event.ts"
 import type {HistoryStore, PendingMessage, SessionCloseRequest} from "./agent"
 import type {AgentCore} from "./agent/core.ts"
 import {CreateOhMyPiAgent} from "./agent/oh-my-pi";
@@ -21,15 +22,51 @@ type ManagedSession = {
     done: Promise<void>
 }
 
+type SessionListener = {
+    push(event: AgentEvent): void
+    flush(): Promise<void> | undefined
+}
+
 export class SessionManager {
     private readonly sessions = new Map<string, ManagedSession>()
+    private readonly listeners = new Map<string, SessionListener>()
 
     constructor(
         private readonly store: HistoryStore,
         private readonly life: AgentLife,
         private readonly getCoreAgent: (id: string, options: AgentOptions) => Promise<AgentCore>,
-        private readonly listener?: AgentEventListener,
     ) {}
+
+    bindListener(id: string, listener: AgentEventListener): () => void {
+        this.validateSessionId(id)
+        if (this.listeners.has(id)) throw new Error(`Session ${id} already has a listener`)
+
+        let delivery: ReturnType<typeof createAgentEventSmoother> | undefined
+        const binding: SessionListener = {
+            push: event => {
+                delivery ??= createAgentEventSmoother(async event => {
+                    if (this.listeners.get(id) !== binding) return
+                    try {
+                        await listener.onEvent(event)
+                    } catch (error) {
+                        console.error("事件发送失败", id, event.type, error)
+                    }
+                })
+                delivery.push(event)
+            },
+            flush: () => {
+                const pending = delivery
+                delivery = undefined
+                return pending?.end()
+            },
+        }
+        this.listeners.set(id, binding)
+        return () => {
+            if (this.listeners.get(id) !== binding) return
+            this.listeners.delete(id)
+            void binding.flush()
+        }
+    }
 
     async submit(submission: Submission): Promise<void> {
         this.validateSessionId(submission.session)
@@ -152,14 +189,6 @@ export class SessionManager {
 
     private async runSession(id: string, ready: Promise<AgentCore>, state: SessionState): Promise<void> {
         const agent = await ready
-        const listener = this.listener
-        const delivery = listener && createAgentEventSmoother(async event => {
-            try {
-                await listener.onEvent(event)
-            } catch (error) {
-                console.error("事件发送失败", id, event.type, error)
-            }
-        })
         let historyWrites = Promise.resolve()
         let unsubscribe: (() => void) | undefined
 
@@ -169,7 +198,7 @@ export class SessionManager {
                     historyWrites = historyWrites.then(() => this.store.append_history_to_store(event))
                         .catch(error => console.error("事件写入历史失败", id, event.type, error))
                 }
-                delivery?.push(event)
+                this.listeners.get(id)?.push(event)
             })
 
             agent.startHeartbeat(() => this.life.report(id, state.ownerId))
@@ -179,7 +208,7 @@ export class SessionManager {
                 await agent.dispose()
             } finally {
                 unsubscribe?.()
-                await Promise.all([historyWrites, delivery?.end()])
+                await Promise.all([historyWrites, this.listeners.get(id)?.flush()])
             }
         }
     }
@@ -230,9 +259,8 @@ export class SessionManager {
 export function createManager(
     store: HistoryStore,
     life: AgentLife,
-    listener?: AgentEventListener,
 ): SessionManager {
     return new SessionManager(store, life, async (id, options) => {
         return CreateOhMyPiAgent(id, options)
-    }, listener)
+    })
 }

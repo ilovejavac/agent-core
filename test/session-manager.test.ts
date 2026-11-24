@@ -284,7 +284,9 @@ test("stores complete messages and lifecycle events while sending deltas only to
     const manager = new SessionManager(store, {
         async alive() { return false },
         async report() {},
-    }, async id => new TestAgent(id), {
+    }, async id => new TestAgent(id))
+    const input = submission({kind: "user-resume"})
+    const unbind = manager.bindListener(input.session, {
         async onEvent(event) {
             written.push(event)
             if (event.type === "turn.ended") liveEnded.resolve()
@@ -295,17 +297,16 @@ test("stores complete messages and lifecycle events while sending deltas only to
             }
         },
     })
-    const input = submission({kind: "user-resume"})
     try {
         await manager.submit(input)
         await Promise.all([historyBlocked.promise, firstWrite.promise])
         assert.deepEqual(history, [turnStarted, messageEnded, toolStarted])
         assert.deepEqual(written.map(event => event.type), [
-            "turn.started", "tool.execution.started", "tool.execution.ended", "message.delta",
+            "turn.started", "message.delta",
         ])
         const firstDelta = written.at(-1)
         assert.ok(firstDelta?.type === "message.delta")
-        assert.notEqual(firstDelta.payload.delta, delta.payload.delta)
+        assert.equal(firstDelta.payload.delta, delta.payload.delta)
         release.resolve()
         await liveEnded.promise
         assert.deepEqual(history, [turnStarted, messageEnded, toolStarted])
@@ -315,14 +316,90 @@ test("stores complete messages and lifecycle events while sending deltas only to
     } finally {
         release.resolve()
         releaseHistory.resolve()
-        await manager.close(input.session)
+        try {
+            await manager.close(input.session)
+        } finally {
+            unbind()
+        }
     }
     assert.equal(written.filter(event => event.type === "message.delta").map(event => event.payload.delta).join(""), delta.payload.delta)
     assert.deepEqual(written.filter(event => event.type !== "message.delta").map(event => [event.type, event.payload]), [
         ["turn.started", turnStarted.payload],
+        ["message.ended", {messageId: "message", role: "assistant"}],
         ["tool.execution.started", toolStarted.payload],
         ["tool.execution.ended", toolEnded.payload],
-        ["message.ended", {messageId: "message", role: "assistant"}],
         ["turn.ended", ended.payload],
     ])
+})
+
+test("keeps one listener per session across submissions and allows explicit rebinding", {timeout: 3_000}, async t => {
+    const store: HistoryStore = {
+        ...createMemoryPendingStore(),
+        async load_history_from_store() { return [] },
+        async append_history_to_store() {},
+    }
+    class TestAgent extends AbstractAgent {
+        private listener?: (event: AgentEvent) => void
+        private seq = 0
+
+        constructor(id: string) { super(id) }
+
+        override subscribe(listener: (event: AgentEvent) => void): () => void {
+            this.listener = listener
+            return () => { this.listener = undefined }
+        }
+
+        override async handleInput() {
+            const runId = String(++this.seq)
+            this.listener?.({
+                type: "run.started", id: `${this.id}-${runId}`, sessionId: this.id,
+                runId, seq: this.seq, timestamp: 0, payload: null,
+            })
+        }
+
+        override async waitForEnd() {}
+
+        protected override async doDispose() {}
+    }
+    const manager = new SessionManager(store, {
+        async alive() { return false },
+        async report() {},
+    }, async id => new TestAgent(id))
+    const first = submission({kind: "user-resume"})
+    const second = {...first, session: "other-session"}
+    t.after(async () => { await Promise.all([manager.close(first.session), manager.close(second.session)]) })
+
+    const originalEvents: string[] = []
+    const secondEvents: string[] = []
+    const replacementEvents: string[] = []
+    const originalReceived = Promise.withResolvers<void>()
+    const unbindOriginal = manager.bindListener(first.session, {
+        async onEvent(event) {
+            originalEvents.push(event.id)
+            if (originalEvents.length === 2) originalReceived.resolve()
+        },
+    })
+    const unbindSecond = manager.bindListener(second.session, {
+        async onEvent(event) { secondEvents.push(event.id) },
+    })
+    const replacement = {
+        async onEvent(event: AgentEventDelivery) { replacementEvents.push(event.id) },
+    }
+    assert.throws(() => manager.bindListener(first.session, replacement), /already has a listener/)
+    await Promise.all([manager.submit(first), manager.submit(second), manager.submit(first)])
+    await originalReceived.promise
+
+    unbindOriginal()
+    const unbindReplacement = manager.bindListener(first.session, replacement)
+    unbindOriginal()
+    await manager.submit(first)
+    await Promise.all([manager.close(first.session), manager.close(second.session)])
+    await manager.submit(first)
+    await manager.close(first.session)
+
+    assert.deepEqual(originalEvents, [`${first.session}-1`, `${first.session}-2`])
+    assert.deepEqual(secondEvents, [`${second.session}-1`])
+    assert.deepEqual(replacementEvents, [`${first.session}-3`, `${first.session}-1`])
+    unbindReplacement()
+    unbindSecond()
 })
