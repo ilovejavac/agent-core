@@ -1,10 +1,15 @@
-import type {AgentEvent, AgentOptions, UserOperation} from "../model.ts"
+import type {AgentOptions, UserOperation} from "../model.ts"
+import type {AgentEvent} from "../event.ts";
 
 export interface AgentCore {
     handleInput(input: UserOperation, options: AgentOptions): Promise<void>
+
     waitForEnd(): Promise<void>
+
     subscribe(listener: (event: AgentEvent) => void): () => void
+
     startHeartbeat(report: () => Promise<void>): void
+
     dispose(): Promise<void>
 }
 
@@ -13,7 +18,8 @@ export abstract class AbstractAgent implements AgentCore {
     private reporting?: Promise<void>
     private disposal?: Promise<void>
 
-    protected constructor(protected readonly id: string) {}
+    protected constructor(protected readonly id: string) {
+    }
 
     startHeartbeat(report: () => Promise<void>): void {
         if (this.heartbeat !== undefined || this.disposal) return
@@ -28,7 +34,7 @@ export abstract class AbstractAgent implements AgentCore {
                 })
         }
 
-        this.heartbeat = setInterval(tick, 5000)
+        this.heartbeat = setInterval(tick, 15_000)
         tick()
     }
 
@@ -43,7 +49,10 @@ export abstract class AbstractAgent implements AgentCore {
     }
 
     abstract handleInput(input: UserOperation, options: AgentOptions): Promise<void>
+
     abstract waitForEnd(): Promise<void>
+
     abstract subscribe(listener: (event: AgentEvent) => void): () => void
+
     protected abstract doDispose(): Promise<void>
 }

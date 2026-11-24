@@ -1,3 +1,7 @@
+import type {AgentEventDelivery} from "./event.ts"
+
+export type {AgentEvent} from "./event.ts"
+
 export type UserInput = {
     kind: "user-input"
 
@@ -7,7 +11,7 @@ export type UserInput = {
     skills: {
       name: string
       path: string
-    }
+    }[]
 
     attachments: {
         index: number,
@@ -43,9 +47,16 @@ export type AgentOptions = {
     setting: TurnConfig
 }
 
+export type TurnProtocol =
+    | 'openai-responses'
+    | 'openai-completions'
+    | 'anthropic-messages'
+    | 'google-generative-ai'
+    | 'azure-openai-responses'
+
 export type TurnConfig = {
     revision: number
-    provider: 'openai' | 'anthropic' | 'google' | 'xai' | 'moonshot' | 'deepseek' | 'azure' | 'zai'
+    protocol: TurnProtocol
     baseurl?: string
     model: string
     apiKey: string
@@ -62,17 +73,14 @@ export type Submission = {
     operation: UserOperation
 }
 
-export type AgentEvent = {
-    type: string
-    usage?: any
-}
-
 export interface AgentEventListener {
-    onEvent(evt: AgentEvent): Promise<void>
+    onEvent(evt: AgentEventDelivery): Promise<void>
 }
 
 export interface AgentLife {
-    alive(id: string): Promise<boolean>
+    alive(id: string): Promise<boolean | string>
 
-    report(id: string): Promise<void>
+    report(id: string, ownerId: string): Promise<void>
+
+    release?(id: string, ownerId: string): Promise<void>
 }

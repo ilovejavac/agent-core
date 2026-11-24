@@ -1,19 +1,37 @@
-import type {AgentEvent, Submission} from "../model.ts";
+import type {Submission} from "../model.ts";
+import type {AgentEvent} from "../event.ts";
+
+export type SessionCloseRequest = {
+    kind: "session-close"
+    session: string
+    replyTo: string
+    expiresAt: number
+    ownerId?: string
+}
+
+export type SessionCloseResult = {
+    kind: "session-close-result"
+    session: string
+    expiresAt: number
+    error?: string
+}
+
+export type PendingMessage = Submission | SessionCloseRequest | SessionCloseResult
 
 export interface HistoryStore {
     load_history_from_store(id: string): Promise<Array<AgentEvent>>
     append_history_to_store(event: AgentEvent): Promise<void>
 
     /** Take the currently queued batch without waiting for new messages. */
-    recall_pending_messages(id: string): Promise<Array<Submission>>
+    recall_pending_messages(id: string): Promise<PendingMessage[]>
 
     /**
      * Wait until messages are available and take a batch. On cancellation, return
      * an empty batch if nothing was taken, or return the batch already taken.
      */
-    wait_and_recall_pending_messages(id: string, signal: AbortSignal): Promise<Array<Submission>>
+    wait_and_recall_pending_messages(id: string, signal: AbortSignal): Promise<PendingMessage[]>
 
-    submit_pending_messages(submission: Submission): Promise<void>
+    submit_pending_messages(message: PendingMessage): Promise<void>
 }
 
 export function createMemoryPendingStore(): Pick<
@@ -22,10 +40,10 @@ export function createMemoryPendingStore(): Pick<
     | "recall_pending_messages"
     | "wait_and_recall_pending_messages"
 > {
-    const queues = new Map<string, Submission[]>()
-    const waiters = new Map<string, (batch: Submission[]) => void>()
+    const queues = new Map<string, PendingMessage[]>()
+    const waiters = new Map<string, (batch: PendingMessage[]) => void>()
 
-    function take(id: string): Submission[] {
+    function take(id: string): PendingMessage[] {
         const batch = queues.get(id) ?? []
         queues.delete(id)
         return batch
@@ -59,10 +77,10 @@ export function createMemoryPendingStore(): Pick<
                 throw new Error(`Session ${id} already has a waiting consumer`)
             }
 
-            return new Promise<Submission[]>(resolve => {
+            return new Promise<PendingMessage[]>(resolve => {
                 const cancel = () => finish([])
 
-                function finish(messages: Submission[]) {
+                function finish(messages: PendingMessage[]) {
                     signal.removeEventListener("abort", cancel)
                     waiters.delete(id)
                     resolve(messages)
