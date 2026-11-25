@@ -178,7 +178,10 @@ export function toEvents(sessionId: string) {
                     }
                 }
                 events.push(emit({
-                    type: "message.ended", runId, payload: {messageId, role, content: messageContent(message)},
+                    type: "message.ended", runId, payload: {
+                        messageId, role, content: messageContent(message),
+                        ...(message.role === "assistant" ? {usage: message.usage} : {}),
+                    },
                 }, run.turnId))
                 return events
             }

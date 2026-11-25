@@ -4,7 +4,7 @@ import {createAgentSession} from "@oh-my-pi/pi-coding-agent/sdk"
 import {SessionManager} from "@oh-my-pi/pi-coding-agent/session/session-manager"
 import type {AgentSession} from "@oh-my-pi/pi-coding-agent/session/agent-session"
 import {createAssistantMessageEventStream, type AssistantMessage} from "@oh-my-pi/pi-ai"
-import {applyTurnConfig} from "../src/index.ts"
+import {applyTurnConfig} from "../src/agent/oh-my-pi/config.ts";
 
 const base = {
     revision: 1,

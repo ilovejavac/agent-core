@@ -1,3 +1,5 @@
+import type {Usage} from "@oh-my-pi/pi-ai"
+
 export type JsonValue =
     | null | boolean | number | string
     | JsonValue[]
@@ -10,6 +12,8 @@ type MessageHeader = {
     messageId: string
     role: "user" | "assistant" | "system"
 }
+
+type MessageCompletion = MessageHeader & { usage?: Usage }
 
 export type MessagePart = { partIndex: number } & (
     | { kind: "text" | "thinking_summary"; text: string }
@@ -33,7 +37,7 @@ type EventPayloads = {
         kind: "text" | "thinking_summary"
         delta: string
     }
-    "message.ended": MessageHeader & { content: MessagePart[] }
+    "message.ended": MessageCompletion & { content: MessagePart[] }
     "tool.call.ready": { toolCallId: string; messageId: string; toolName: string; args?: JsonValue }
     "tool.execution.started": { toolCallId: string; toolName: string }
     "tool.execution.updated": { toolCallId: string; snapshot: JsonValue }
@@ -77,5 +81,5 @@ export type AgentEvent = EventEnvelope & AgentEventData
 
 export type AgentEventDelivery = EventEnvelope & (
     | EventData<Exclude<EventType, "message.ended">>
-    | {type: "message.ended"; runId: string; payload: MessageHeader}
+    | {type: "message.ended"; runId: string; payload: MessageCompletion}
 )

@@ -35,11 +35,13 @@ export class SessionManager {
         private readonly store: HistoryStore,
         private readonly life: AgentLife,
         private readonly getCoreAgent: (id: string, options: AgentOptions) => Promise<AgentCore>,
-    ) {}
+    ) {
+    }
 
     bindListener(id: string, listener: AgentEventListener): () => void {
         this.validateSessionId(id)
-        if (this.listeners.has(id)) throw new Error(`Session ${id} already has a listener`)
+        if (this.listeners.has(id)) return () => {
+        }
 
         let delivery: ReturnType<typeof createAgentEventSmoother> | undefined
         const binding: SessionListener = {
@@ -195,7 +197,7 @@ export class SessionManager {
         try {
             unsubscribe = agent.subscribe(event => {
                 if (event.type !== "message.delta") {
-                    historyWrites = historyWrites.then(() => this.store.append_history_to_store(event))
+                    historyWrites = historyWrites.then(() => this.store.append_history_to_store(id, event))
                         .catch(error => console.error("事件写入历史失败", id, event.type, error))
                 }
                 this.listeners.get(id)?.push(event)

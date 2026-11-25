@@ -2,7 +2,7 @@
 
 ## 订阅入口
 
-服务端通过 `createManager(store, life)` 创建管理器，再用 `manager.bindListener(sessionId, listener)` 绑定会话的实时事件。每个会话只能绑定一个 listener，重复绑定会抛错并保留原绑定。前端先建立会话订阅，再提交用户输入。绑定持续到调用返回的解绑函数，连接断开时应调用它。历史记录由业务服务通过 `HistoryStore.load_history_from_store(sessionId)` 提供。
+服务端通过 `createManager(store, life)` 创建管理器，再用 `manager.bindListener(sessionId, listener)` 绑定会话的实时事件。每个会话只能绑定一个 listener，重复绑定会直接跳过并保留原绑定，返回的解绑函数不执行任何操作。前端先建立会话订阅，再提交用户输入。绑定持续到调用返回的解绑函数，连接断开时应调用它。历史记录由业务服务通过 `HistoryStore.load_history_from_store(sessionId)` 提供。
 
 ```ts
 import type { SessionManager } from "@centlu/agent-core"
@@ -49,7 +49,8 @@ function subscribe(url: string, onEvent: (event: AgentEventDelivery) => void) {
 | `run.paused` | `{ yielded, awaiting }` | 将运行标记为暂停。`awaiting` 为 `true` 时表示在等待外部工作。 |
 | `run.ended` | `{ status, error? }` | 结束对应运行。 |
 | `turn.started` / `turn.ended` | `{ turnId }` / `{ turnId, status }` | 按 `turnId` 更新轮次状态。一个 turn 结束后，运行可以继续。 |
-| `message.started` / `message.ended` | `{ messageId, role }` | 创建消息占位或标记完成。`role` 为 `user`、`assistant` 或 `system`。用户输入可在提交时直接显示。 |
+| `message.started` | `{ messageId, role }` | 创建消息占位。`role` 为 `user`、`assistant` 或 `system`。用户输入可在提交时直接显示。 |
+| `message.ended` | `{ messageId, role, usage? }` | 标记消息完成。助手消息的 `usage` 记录本次模型调用的用量。 |
 | `message.delta` | `{ messageId, partIndex, kind, delta }` | 按 `messageId` 和 `partIndex` 追加 `delta`。`kind` 为 `text` 或 `thinking_summary`，分别渲染正文和思考摘要。 |
 | `tool.call.ready` | `{ toolCallId, messageId, toolName, args? }` | 创建或更新工具卡片，并关联到发起它的消息。 |
 | `tool.execution.started` | `{ toolCallId, toolName }` | 将工具标记为执行中。也可以在此时创建工具卡片。 |
@@ -61,6 +62,8 @@ function subscribe(url: string, onEvent: (event: AgentEventDelivery) => void) {
 | `context.compaction.ended` | `{ compactionId, trigger, strategy?, status, willRetry?, tokensBefore?, error? }` | 更新对应压缩状态。 |
 
 `status` 可以是 `succeeded`、`failed`、`cancelled` 或 `unknown`。压缩结束还可以是 `skipped`。`error` 的形状是 `{ message: string, code?: string }`。工具参数、快照及结果都是 JSON 值，展示时按各工具的内容格式处理。
+
+`usage` 包含 `input`、`output`、`cacheRead`、`cacheWrite`、`totalTokens` 和 `cost`。模型提供额外统计时，也可能包含 `contextTokens`、`reasoningTokens` 等字段。可以按 `runId` 汇总已收到的助手消息用量，并用 `messageId` 对实时和历史事件去重。
 
 同一消息部分的 `message.delta` 默认在 16 ms 内合并成一批，批内没有字符数限制。切换消息部分（如从思考摘要切到正文），或收到 `message.ended`、`turn.ended`、`run.ended` 时，待发文本立即进入发送队列。工具调用、进度和结果可在待发文本仍在合并时送达。前端按事件自身的 `runId`、`turnId`、`messageId` 和 `toolCallId` 更新对应对象。
 
@@ -79,7 +82,7 @@ function subscribe(url: string, onEvent: (event: AgentEventDelivery) => void) {
 {"type":"message.delta","id":"e6","sessionId":"s1","runId":"r1","turnId":"t1","seq":6,"timestamp":1780000000002,"payload":{"messageId":"m1","partIndex":0,"kind":"thinking_summary","delta":"先看项目配置。"}}
 {"type":"tool.call.ready","id":"e7","sessionId":"s1","runId":"r1","turnId":"t1","seq":7,"timestamp":1780000000019,"payload":{"toolCallId":"c1","messageId":"m1","toolName":"read","args":{"path":"package.json"}}}
 {"type":"message.delta","id":"e8","sessionId":"s1","runId":"r1","turnId":"t1","seq":8,"timestamp":1780000000018,"payload":{"messageId":"m1","partIndex":0,"kind":"thinking_summary","delta":"确认运行时。"}}
-{"type":"message.ended","id":"e9","sessionId":"s1","runId":"r1","turnId":"t1","seq":9,"timestamp":1780000000019,"payload":{"messageId":"m1","role":"assistant"}}
+{"type":"message.ended","id":"e9","sessionId":"s1","runId":"r1","turnId":"t1","seq":9,"timestamp":1780000000019,"payload":{"messageId":"m1","role":"assistant","usage":{"input":100,"output":20,"cacheRead":0,"cacheWrite":0,"totalTokens":120,"cost":{"input":0.0001,"output":0.0002,"cacheRead":0,"cacheWrite":0,"total":0.0003}}}}
 {"type":"tool.execution.started","id":"e10","sessionId":"s1","runId":"r1","turnId":"t1","seq":10,"timestamp":1780000000020,"payload":{"toolCallId":"c1","toolName":"read"}}
 {"type":"tool.execution.ended","id":"e11","sessionId":"s1","runId":"r1","turnId":"t1","seq":11,"timestamp":1780000000021,"payload":{"toolCallId":"c1","status":"succeeded","result":{"content":[{"type":"text","text":"bun test"}]}}}
 {"type":"turn.ended","id":"e12","sessionId":"s1","runId":"r1","turnId":"t1","seq":12,"timestamp":1780000000022,"payload":{"turnId":"t1","status":"succeeded"}}
@@ -87,7 +90,7 @@ function subscribe(url: string, onEvent: (event: AgentEventDelivery) => void) {
 {"type":"message.started","id":"e14","sessionId":"s1","runId":"r1","turnId":"t2","seq":14,"timestamp":1780000000080,"payload":{"messageId":"m2","role":"assistant"}}
 {"type":"message.delta","id":"e15","sessionId":"s1","runId":"r1","turnId":"t2","seq":15,"timestamp":1780000000080,"payload":{"messageId":"m2","partIndex":0,"kind":"text","delta":"项目使用 Bu"}}
 {"type":"message.delta","id":"e16","sessionId":"s1","runId":"r1","turnId":"t2","seq":16,"timestamp":1780000000080,"payload":{"messageId":"m2","partIndex":0,"kind":"text","delta":"n。"}}
-{"type":"message.ended","id":"e17","sessionId":"s1","runId":"r1","turnId":"t2","seq":17,"timestamp":1780000000085,"payload":{"messageId":"m2","role":"assistant"}}
+{"type":"message.ended","id":"e17","sessionId":"s1","runId":"r1","turnId":"t2","seq":17,"timestamp":1780000000085,"payload":{"messageId":"m2","role":"assistant","usage":{"input":40,"output":10,"cacheRead":100,"cacheWrite":0,"totalTokens":150,"cost":{"input":0.00004,"output":0.0001,"cacheRead":0.00001,"cacheWrite":0,"total":0.00015}}}}
 {"type":"turn.ended","id":"e18","sessionId":"s1","runId":"r1","turnId":"t2","seq":18,"timestamp":1780000000085,"payload":{"turnId":"t2","status":"succeeded"}}
 {"type":"run.ended","id":"e19","sessionId":"s1","runId":"r1","seq":19,"timestamp":1780000000086,"payload":{"status":"succeeded"}}
 ```
@@ -96,7 +99,7 @@ function subscribe(url: string, onEvent: (event: AgentEventDelivery) => void) {
 
 ## 历史与断线恢复
 
-实时 `message.delta` 用于临时渲染，历史存储跳过这些增量。历史的 `message.ended` 含完整 `content`，其中各部分通过 `partIndex` 关联，可以是 `{ kind: "text" | "thinking_summary", text }`、`{ kind: "image", data, mimeType }` 或 `{ kind: "tool_call", toolCallId }`。工具和轮次事件也保存在历史中。
+实时 `message.delta` 用于临时渲染，历史存储跳过这些增量。历史的 `message.ended` 保留 `usage`，并含完整 `content`，其中各部分通过 `partIndex` 关联，可以是 `{ kind: "text" | "thinking_summary", text }`、`{ kind: "image", data, mimeType }` 或 `{ kind: "tool_call", toolCallId }`。工具和轮次事件也保存在历史中。
 
 第二轮助手消息对应的历史事件如下。
 
@@ -112,6 +115,14 @@ function subscribe(url: string, onEvent: (event: AgentEventDelivery) => void) {
     "payload": {
         "messageId": "m2",
         "role": "assistant",
+        "usage": {
+            "input": 40,
+            "output": 10,
+            "cacheRead": 100,
+            "cacheWrite": 0,
+            "totalTokens": 150,
+            "cost": {"input": 0.00004, "output": 0.0001, "cacheRead": 0.00001, "cacheWrite": 0, "total": 0.00015}
+        },
         "content": [{"partIndex": 0, "kind": "text", "text": "项目使用 Bun。"}]
     }
 }

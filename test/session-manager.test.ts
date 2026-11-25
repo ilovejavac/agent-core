@@ -33,7 +33,7 @@ test("another Pod can interrupt a running session during remote close and wait f
     }
     const store: HistoryStore = {
         async load_history_from_store() { return [] },
-        async append_history_to_store(event) {
+        async append_history_to_store(_id, event) {
             await sleep(25)
             if (event.type === "run.ended") history.push(event.payload.status)
         },
@@ -254,7 +254,7 @@ test("stores complete messages and lifecycle events while sending deltas only to
     const store: HistoryStore = {
         ...createMemoryPendingStore(),
         async load_history_from_store() { return history },
-        async append_history_to_store(event) {
+        async append_history_to_store(_id, event) {
             history.push(event)
             if (event.type === "tool.execution.started") {
                 historyBlocked.resolve()
@@ -385,13 +385,15 @@ test("keeps one listener per session across submissions and allows explicit rebi
     const replacement = {
         async onEvent(event: AgentEventDelivery) { replacementEvents.push(event.id) },
     }
-    assert.throws(() => manager.bindListener(first.session, replacement), /already has a listener/)
+    const unbindDuplicate = manager.bindListener(first.session, replacement)
+    unbindDuplicate()
     await Promise.all([manager.submit(first), manager.submit(second), manager.submit(first)])
     await originalReceived.promise
 
     unbindOriginal()
     const unbindReplacement = manager.bindListener(first.session, replacement)
     unbindOriginal()
+    unbindDuplicate()
     await manager.submit(first)
     await Promise.all([manager.close(first.session), manager.close(second.session)])
     await manager.submit(first)

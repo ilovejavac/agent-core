@@ -66,7 +66,7 @@ test("tool results bypass queued delta chunks and completion follows the final c
     assert.equal(delta.payload.delta, "你好🙂世界")
 })
 
-test("live listeners receive thinking deltas and metadata-only message completion", async () => {
+test("live listeners receive thinking deltas and message completion with usage", async () => {
     const written: AgentEventDelivery[] = []
     const smoother = createAgentEventSmoother(event => { written.push(event) }, {intervalMs: 1})
     const delta: AgentEvent = {
@@ -75,10 +75,15 @@ test("live listeners receive thinking deltas and metadata-only message completio
     }
     const finalMessage: AgentEvent = {
         type: "message.ended", ...envelope, seq: 2, id: "final", turnId: "turn",
-        payload: {messageId: "message", role: "assistant", content: [
-            {kind: "thinking_summary", partIndex: 0, text: "abcd"},
-            {kind: "text", partIndex: 1, text: "你好世界"},
-        ]},
+        payload: {
+            messageId: "message", role: "assistant",
+            content: [
+                {kind: "thinking_summary", partIndex: 0, text: "abcd"},
+                {kind: "text", partIndex: 1, text: "你好世界"},
+            ],
+            usage: {input: 15, output: 5, cacheRead: 0, cacheWrite: 0, totalTokens: 20,
+                cost: {input: 0.001, output: 0.002, cacheRead: 0, cacheWrite: 0, total: 0.003}},
+        },
     }
     smoother.push(delta)
     smoother.push(finalMessage)
@@ -88,7 +93,9 @@ test("live listeners receive thinking deltas and metadata-only message completio
     assert.deepEqual(written.filter(event => event.type === "message.delta").map(event => [event.payload.kind, event.payload.delta]), [
         ["thinking_summary", "abc"],
     ])
-    assert.deepEqual(written.at(-2), {...finalMessage, seq: 2, payload: {messageId: "message", role: "assistant"}})
+    assert.deepEqual(written.at(-2), {...finalMessage, seq: 2, payload: {
+        messageId: "message", role: "assistant", usage: finalMessage.payload.usage,
+    }})
     assert.deepEqual(written.at(-1), {...ended, seq: 3})
 })
 

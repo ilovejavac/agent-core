@@ -1,6 +1,27 @@
 import assert from "node:assert/strict"
 import test from "node:test"
+import type {AssistantMessage} from "@oh-my-pi/pi-ai"
 import {toEvents} from "../src/agent/oh-my-pi/events.ts"
+
+test("Pi message completions expose usage for assistant messages", () => {
+    const {convert} = toEvents("session")
+    convert({type: "agent_start"})
+    const [user] = convert({type: "message_end", message: {role: "user", content: "Hello", timestamp: 1}})
+    const message: AssistantMessage = {
+        role: "assistant", content: [{type: "text", text: "Hi"}], timestamp: 2,
+        api: "openai-responses", provider: "openai", model: "gpt-5", stopReason: "stop",
+        usage: {
+            input: 10, output: 5, cacheRead: 20, cacheWrite: 0, totalTokens: 35, contextTokens: 35,
+            cost: {input: 0.001, output: 0.002, cacheRead: 0.001, cacheWrite: 0, total: 0.004},
+        },
+    }
+    const [assistant] = convert({type: "message_end", message})
+
+    assert.ok(user?.type === "message.ended")
+    assert.ok(assistant?.type === "message.ended")
+    assert.equal("usage" in user.payload, false)
+    assert.deepEqual(assistant.payload.usage, message.usage)
+})
 
 test("Pi pause and resume keep the same run ID, and disposal closes an open run once", () => {
     const {convert, dispose} = toEvents("session")

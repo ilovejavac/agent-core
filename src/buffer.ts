@@ -61,10 +61,11 @@ export function createAgentEventSmoother(
 
             if (event.type === "message.ended") {
                 const {id, sessionId, runId, turnId, timestamp, seq, payload} = event
+                const {messageId, role, usage} = payload
                 send({
                     type: "message.ended", id, sessionId, runId, timestamp, seq,
                     ...(turnId === undefined ? {} : {turnId}),
-                    payload: {messageId: payload.messageId, role: payload.role},
+                    payload: {messageId, role, ...(usage === undefined ? {} : {usage})},
                 })
             } else {
                 send(event)
