@@ -77,8 +77,15 @@ export interface AgentEventListener {
     onEvent(evt: AgentEventDelivery): Promise<void>
 }
 
+export type ActivitySession = {
+    sessionId: string
+    ownerId: string
+}
+
 export interface AgentLife {
     alive(id: string): Promise<boolean | string>
+
+    getActiveSessions?(): Promise<ActivitySession[]>
 
     report(id: string, ownerId: string): Promise<void>
 

@@ -1,4 +1,4 @@
-import type {AgentEventListener, AgentLife, AgentOptions, Submission} from "./model.ts"
+import type {ActivitySession, AgentEventListener, AgentLife, AgentOptions, Submission} from "./model.ts"
 import type {AgentEvent} from "./event.ts"
 import type {HistoryStore, PendingMessage, SessionCloseRequest} from "./agent"
 import type {AgentCore} from "./agent/core.ts"
@@ -36,6 +36,10 @@ export class SessionManager {
         private readonly life: AgentLife,
         private readonly getCoreAgent: (id: string, options: AgentOptions) => Promise<AgentCore>,
     ) {
+    }
+
+    async getActiveSessions(): Promise<ActivitySession[]> {
+        return this.life.getActiveSessions?.() ?? []
     }
 
     bindListener(id: string, listener: AgentEventListener): () => void {

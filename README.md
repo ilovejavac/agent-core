@@ -18,6 +18,10 @@ History stores receive the original non-delta events. Live delivery proceeds ind
 
 When `createManager` opens or reopens a session, it loads that session's events in append order and uses completed messages and tool results to seed the in-memory Pi context before processing input. Restoration does not emit historical events. Compaction summaries and provider-native metadata are unavailable in the stored event format.
 
+## Active Sessions
+
+`await manager.getActiveSessions()` returns the active `{sessionId, ownerId}` records from `AgentLife`, including other Pods when the adapter uses shared liveness records. The in-memory adapter supports this query. Custom adapters can implement `AgentLife.getActiveSessions()` using the same liveness rules as `alive`. The manager returns an empty list if the adapter omits this method.
+
 ## Session Close
 
 `SessionManager.close(id)` gracefully drains the session. A close from another Pod uses the shared `HistoryStore` pending queue and waits up to 30 seconds for disposal to finish or for the targeted owner to leave. It throws on timeout or if the owner reports a disposal failure.

@@ -3,7 +3,7 @@ import test from "node:test"
 import {setTimeout as sleep} from "node:timers/promises"
 import {SessionManager, type AgentEvent, type AgentEventDelivery, type HistoryStore, type PendingMessage, type Submission, type UserOperation} from "../src/index.ts"
 import {AbstractAgent} from "../src/agent/core.ts"
-import {createMemoryPendingStore} from "../src/agent/store.ts"
+import {createMemoryAgentLife, createMemoryPendingStore} from "../src/agent/store.ts"
 
 const submission = (operation: UserOperation): Submission => ({
     session: "test-session",
@@ -73,7 +73,6 @@ test("another Pod can interrupt a running session during remote close and wait f
     const interrupted = Promise.withResolvers<void>()
     let listener: ((event: AgentEvent) => void) | undefined
     let creations = 0
-    const liveSessions = new Map<string, string>()
     let seq = 0
 
     class TestAgent extends AbstractAgent {
@@ -109,13 +108,7 @@ test("another Pod can interrupt a running session during remote close and wait f
         }
     }
 
-    const life = {
-        async alive(id: string) { return liveSessions.get(id) ?? false },
-        async report(id: string, ownerId: string) { liveSessions.set(id, ownerId) },
-        async release(id: string, ownerId: string) {
-            if (liveSessions.get(id) === ownerId) liveSessions.delete(id)
-        },
-    }
+    const life = createMemoryAgentLife()
     const owner = new SessionManager(store, life, async id => {
         creations++
         return new TestAgent(id)
@@ -135,7 +128,9 @@ test("another Pod can interrupt a running session during remote close and wait f
         await sleep(125)
         assert.equal(waitingReads, 1)
         assert.equal(immediateReads, 0)
-        assert.ok(liveSessions.has(input.session))
+        const ownerId = await life.alive(input.session)
+        assert.equal(typeof ownerId, "string")
+        assert.deepEqual(await otherPod.getActiveSessions(), [{sessionId: input.session, ownerId}])
 
         const closing = otherPod.close(input.session)
         await closingConsumerWaiting.promise
@@ -145,10 +140,27 @@ test("another Pod can interrupt a running session during remote close and wait f
         assert.equal(creations, 1)
         assert.equal(immediateReads, 1)
         assert.deepEqual(history, ["cancelled", "succeeded", "unknown"])
+        assert.deepEqual(await otherPod.getActiveSessions(), [])
     } finally {
         interrupted.resolve()
         await owner.close("test-session")
     }
+})
+
+test("returns no active sessions when agent life cannot list them", async () => {
+    const store: HistoryStore = {
+        ...createMemoryPendingStore(),
+        async load_history_from_store() { return [] },
+        async append_history_to_store() {},
+    }
+    const manager = new SessionManager(store, {
+        async alive() { return false },
+        async report() {},
+    }, async () => {
+        throw new Error("Listing active sessions must not start a session")
+    })
+
+    assert.deepEqual(await manager.getActiveSessions(), [])
 })
 
 test("a close queued during disposal cannot close the replacement session", {timeout: 3_000}, async () => {

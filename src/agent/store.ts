@@ -142,6 +142,9 @@ export function createMemoryAgentLife(): AgentLife {
         async alive(id: string): Promise<boolean | string> {
             return aliveMap.get(id) ?? false
         },
+        async getActiveSessions() {
+            return Array.from(aliveMap, ([sessionId, ownerId]) => ({sessionId, ownerId}))
+        },
         async release(id: string, ownerId: string): Promise<void> {
             if (aliveMap.get(id) === ownerId) {
                 aliveMap.delete(id)
